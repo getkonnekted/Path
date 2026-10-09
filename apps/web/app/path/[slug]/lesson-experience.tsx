@@ -113,7 +113,12 @@ export default function LessonExperience() {
   const lesson = lessons[activeLesson]!;
   const question = questions[questionIndex]!;
   const correctCount = answers.filter(Boolean).length;
-  const percent = quizCompleted ? 100 : quizStarted ? 80 + Math.round((questionIndex / questions.length) * 20) : Math.round((visitedLessons.length / lessons.length) * 80);\n\n  function visitLesson(index: number) {\n    setActiveLesson(index);\n    setVisitedLessons((previous) => previous.includes(index) ? previous : [...previous, index]);\n  }
+  const percent = quizCompleted ? 100 : quizStarted ? 80 + Math.round((questionIndex / questions.length) * 20) : Math.round((visitedLessons.length / lessons.length) * 80);
+
+  function visitLesson(index: number) {
+    setActiveLesson(index);
+    setVisitedLessons((previous) => previous.includes(index) ? previous : [...previous, index]);
+  }
 
   function chooseAnswer(index: number) {
     if (selected !== null) return;
@@ -127,7 +132,9 @@ export default function LessonExperience() {
       setSelected(null);
       return;
     }
-    setQuizCompleted(true);\n    setLatestScore(correctCount);\n    setFinished(true);
+    setQuizCompleted(true);
+    setLatestScore(correctCount);
+    setFinished(true);
   }
 
   function restartQuiz() {
