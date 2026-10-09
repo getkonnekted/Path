@@ -19,7 +19,7 @@ export default function HomePage() {
             PATH turns Bible reading into a learning journey. Explore the people and events,
             understand the story, remember what matters, and connect what you learn.
           </p>
-          <a className="primary-link" href="#first-path">Explore the first path <span aria-hidden="true">↗</span></a>
+          <Link className="primary-link" href="/path/life-of-david">Start The Life of David <span aria-hidden="true">↗</span></Link>
         </div>
 
         <aside className="path-card" aria-label="Preview of The Life of David learning path">
