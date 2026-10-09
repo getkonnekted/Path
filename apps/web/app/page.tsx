@@ -8,7 +8,10 @@ export default function HomePage() {
     <main>
       <header className="shell topbar">
         <Link className="brand" href="/" aria-label="PATH home">PA<span>TH</span></Link>
-        <span className="top-link">A more thoughtful way to learn Scripture</span>
+        <div className="topbar-actions">
+          <span className="top-link">A more thoughtful way to learn Scripture</span>
+          <Link className="account-link" href="/auth/sign-in">Sign in</Link>
+        </div>
       </header>
 
       <section className="shell hero">
