@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 
 const lessons = [
@@ -54,8 +54,56 @@ const questions = [
   }
 ];
 
+type SavedJourney = {
+  activeLesson: number;
+  visitedLessons: number[];
+  quizCompleted: boolean;
+  latestScore: number | null;
+};
+
+const STORAGE_KEY = "path:life-of-david:progress:v1";
+
 export default function LessonExperience() {
   const [activeLesson, setActiveLesson] = useState(0);
+  const [visitedLessons, setVisitedLessons] = useState<number[]>([0]);
+  const [quizCompleted, setQuizCompleted] = useState(false);
+  const [latestScore, setLatestScore] = useState<number | null>(null);
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const saved = JSON.parse(raw) as Partial<SavedJourney>;
+        if (typeof saved.activeLesson === "number" && saved.activeLesson >= 0 && saved.activeLesson < lessons.length) {
+          setActiveLesson(saved.activeLesson);
+        }
+        if (Array.isArray(saved.visitedLessons)) {
+          setVisitedLessons(saved.visitedLessons.filter((index): index is number =>
+            Number.isInteger(index) && index >= 0 && index < lessons.length
+          ));
+        }
+        if (typeof saved.quizCompleted === "boolean") setQuizCompleted(saved.quizCompleted);
+        if (typeof saved.latestScore === "number" && saved.latestScore >= 0 && saved.latestScore <= questions.length) {
+          setLatestScore(saved.latestScore);
+        }
+      }
+    } catch {
+      // Storage may be disabled or contain an invalid older value; keep the session usable.
+    } finally {
+      setHydrated(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    const saved: SavedJourney = { activeLesson, visitedLessons, quizCompleted, latestScore };
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+    } catch {
+      // Learning still works when the browser blocks local storage.
+    }
+  }, [activeLesson, visitedLessons, quizCompleted, latestScore, hydrated]);
   const [quizStarted, setQuizStarted] = useState(false);
   const [questionIndex, setQuestionIndex] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
@@ -65,7 +113,7 @@ export default function LessonExperience() {
   const lesson = lessons[activeLesson]!;
   const question = questions[questionIndex]!;
   const correctCount = answers.filter(Boolean).length;
-  const percent = finished ? 100 : quizStarted ? Math.round((questionIndex / questions.length) * 100) : Math.round(((activeLesson + 1) / lessons.length) * 100);
+  const percent = quizCompleted ? 100 : quizStarted ? 80 + Math.round((questionIndex / questions.length) * 20) : Math.round((visitedLessons.length / lessons.length) * 80);\n\n  function visitLesson(index: number) {\n    setActiveLesson(index);\n    setVisitedLessons((previous) => previous.includes(index) ? previous : [...previous, index]);\n  }
 
   function chooseAnswer(index: number) {
     if (selected !== null) return;
@@ -79,7 +127,7 @@ export default function LessonExperience() {
       setSelected(null);
       return;
     }
-    setFinished(true);
+    setQuizCompleted(true);\n    setLatestScore(correctCount);\n    setFinished(true);
   }
 
   function restartQuiz() {
@@ -100,13 +148,13 @@ export default function LessonExperience() {
           <button
             className={"lesson-nav" + (activeLesson === index && !quizStarted ? " active" : "")}
             key={item.title}
-            onClick={() => { setActiveLesson(index); setQuizStarted(false); setFinished(false); }}
+            onClick={() => { visitLesson(index); setQuizStarted(false); setFinished(false); }}
           >
-            <span className="lesson-nav-number">{String(index + 1).padStart(2, "0")}</span>
+            <span className="lesson-nav-number">{visitedLessons.includes(index) ? "✓" : String(index + 1).padStart(2, "0")}</span>
             <span><strong>{item.title}</strong><small>{item.kind} · {item.minutes}</small></span>
           </button>
         ))}
-        <div className="sidebar-note">Progress here is a practice indicator. Your answers are currently kept only in this page session.</div>
+        <div className="sidebar-note">{hydrated ? "Progress is saved on this device, so you can return to this journey in the same browser." : "Restoring your learning progress…"}{latestScore !== null && <strong className="saved-score">Latest quiz: {latestScore} of {questions.length} correct</strong>}</div>
       </aside>
 
       <section className="lesson-panel" aria-live="polite">
@@ -119,9 +167,9 @@ export default function LessonExperience() {
             <div className="insight-card"><span className="insight-label">KEY OBSERVATION</span><p>{lesson.takeaway}</p></div>
             <div className="reading-prompt"><strong>Try this</strong><p>{lesson.prompt}</p></div>
             <div className="lesson-actions">
-              <button className="secondary-button" onClick={() => setActiveLesson((activeLesson + lessons.length - 1) % lessons.length)}>Previous lesson</button>
+              <button className="secondary-button" onClick={() => visitLesson((activeLesson + lessons.length - 1) % lessons.length)}>Previous lesson</button>
               {activeLesson < lessons.length - 1 ? (
-                <button className="primary-button" onClick={() => setActiveLesson(activeLesson + 1)}>Next lesson <span aria-hidden="true">→</span></button>
+                <button className="primary-button" onClick={() => visitLesson(activeLesson + 1)}>Next lesson <span aria-hidden="true">→</span></button>
               ) : (
                 <button className="primary-button" onClick={() => { setQuizStarted(true); setQuestionIndex(0); setSelected(null); setAnswers([]); setFinished(false); }}>Test your understanding →</button>
               )}
@@ -165,10 +213,10 @@ export default function LessonExperience() {
             <p className="lesson-body">{correctCount === questions.length ? "Excellent recall. Keep connecting the details to the passage itself." : "Good practice. Your missed answers are not a failure; they show what to revisit. Return to 1 Samuel 16 and try explaining the story in your own words."}</p>
             <div className="insight-card"><span className="insight-label">NEXT STEP</span><p>Read 1 Samuel 16 once more. Then explain why David's anointing matters in the wider story of Israel.</p></div>
             <div className="lesson-actions">
-              <button className="secondary-button" onClick={() => { setFinished(false); setQuizStarted(false); setActiveLesson(0); }}>Review lessons</button>
+              <button className="secondary-button" onClick={() => { setFinished(false); setQuizStarted(false); visitLesson(0); }}>Review lessons</button>
               <button className="primary-button" onClick={restartQuiz}>Try the questions again ↻</button>
             </div>
-            <p className="content-note">This result is temporary in this prototype. Sign-in and saved learning history have not been added yet.</p>
+            <p className="content-note">Your latest score is saved locally in this browser. It is not synced across devices, and no account is required.</p>
             <Link className="return-link" href="/">Return to PATH home ↗</Link>
           </div>
         )}
