@@ -29,4 +29,7 @@ jobs:
       - name: Typecheck workspace
         run: pnpm typecheck
       - name: Build web application
+        env:
+          NEON_AUTH_BASE_URL: https://ep-mute-fire-b2h30n59.neonauth.c-6.eu-central-1.aws.neon.tech/neondb/auth
+          NEON_AUTH_COOKIE_SECRET: path-ci-only-not-for-deployment-0123456789abcdef
         run: pnpm --filter @path/web build
