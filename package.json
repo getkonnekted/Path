@@ -2,11 +2,15 @@
   "name": "path",
   "private": true,
   "version": "0.1.0",
-  "packageManager": "pnpm@10.34.6",
+  "packageManager": "yarn@4.9.2",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
-    "dev:web": "pnpm --filter @path/web dev",
-    "dev:mobile": "pnpm --filter @path/mobile start",
-    "typecheck": "pnpm -r typecheck"
+    "dev:web": "yarn workspace @path/web dev",
+    "dev:mobile": "yarn workspace @path/mobile start",
+    "typecheck": "yarn workspaces foreach -A run typecheck"
   },
   "devDependencies": {
     "typescript": "^5.8.3"
