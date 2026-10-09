@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { authClient } from "@/lib/auth/client";
 
 const lessons = [
   {
@@ -61,14 +62,30 @@ type SavedJourney = {
   latestScore: number | null;
 };
 
+type CloudProgress = {
+  active_step_id: string | null;
+  completed_step_ids: string[];
+  latest_score: number | null;
+  quiz_total: number | null;
+};
+
+const STEP_IDS = ["read", "explore", "remember"] as const;
+
 const STORAGE_KEY = "path:life-of-david:progress:v1";
 
 export default function LessonExperience() {
+  const session = authClient.useSession();
+  const signedIn = Boolean(session.data?.user);
   const [activeLesson, setActiveLesson] = useState(0);
   const [visitedLessons, setVisitedLessons] = useState<number[]>([0]);
   const [quizCompleted, setQuizCompleted] = useState(false);
   const [latestScore, setLatestScore] = useState<number | null>(null);
   const [hydrated, setHydrated] = useState(false);
+  const [cloudProgress, setCloudProgress] = useState<CloudProgress | null>(null);
+  const [syncAvailable, setSyncAvailable] = useState(false);
+  const [cloudEnabled, setCloudEnabled] = useState(false);
+  const [syncPending, setSyncPending] = useState(false);
+  const [syncMessage, setSyncMessage] = useState("");
 
   useEffect(() => {
     try {
@@ -104,6 +121,104 @@ export default function LessonExperience() {
       // Learning still works when the browser blocks local storage.
     }
   }, [activeLesson, visitedLessons, quizCompleted, latestScore, hydrated]);
+
+  useEffect(() => {
+    if (!hydrated || !signedIn) {
+      setSyncAvailable(false);
+      setCloudProgress(null);
+      setCloudEnabled(false);
+      return;
+    }
+    let cancelled = false;
+    fetch("/api/progress/life-of-david", { cache: "no-store" })
+      .then(async (response) => {
+        const result = await response.json();
+        if (cancelled) return;
+        if (!response.ok) {
+          setSyncMessage(result.error || "Cloud progress is not available right now.");
+          return;
+        }
+        setCloudProgress(result.progress ?? null);
+        setSyncAvailable(true);
+        setSyncMessage("");
+      })
+      .catch(() => {
+        if (!cancelled) setSyncMessage("Could not reach cloud progress. Your device progress is safe.");
+      });
+    return () => { cancelled = true; };
+  }, [hydrated, signedIn]);
+
+  async function syncProgress() {
+    setSyncPending(true);
+    setSyncMessage("");
+    const completedStepIds = Array.from(new Set([
+      ...visitedLessons.map((index) => STEP_IDS[index]).filter((step): step is typeof STEP_IDS[number] => Boolean(step)),
+      ...(cloudProgress?.completed_step_ids ?? [])
+    ]));
+    const shouldUseCloudActiveStep = visitedLessons.length === 1 && activeLesson === 0 && cloudProgress?.active_step_id;
+    const activeStepId = shouldUseCloudActiveStep ? cloudProgress.active_step_id : STEP_IDS[activeLesson];
+    const scoreToKeep = latestScore ?? cloudProgress?.latest_score ?? null;
+    const totalToKeep = scoreToKeep === null ? null : (latestScore !== null ? questions.length : cloudProgress?.quiz_total ?? questions.length);
+
+    try {
+      const response = await fetch("/api/progress/life-of-david", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          activeStepId,
+          completedStepIds,
+          latestScore: scoreToKeep,
+          quizTotal: totalToKeep
+        })
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        setSyncMessage(result.error || "Could not sync progress. Your device progress is safe.");
+        return;
+      }
+      setCloudProgress(result.progress ?? null);
+      if (shouldUseCloudActiveStep) {
+        const remoteIndex = STEP_IDS.indexOf(cloudProgress?.active_step_id as typeof STEP_IDS[number]);
+        if (remoteIndex >= 0) {
+          setActiveLesson(remoteIndex);
+          setVisitedLessons((previous) => Array.from(new Set([...previous, remoteIndex])));
+        }
+      }
+      if (latestScore === null && typeof cloudProgress?.latest_score === "number") {
+        setLatestScore(cloudProgress.latest_score);
+        setQuizCompleted(true);
+      }
+      setCloudEnabled(true);
+      setSyncMessage("Progress is connected to your PATH account. This device remains available offline.");
+    } catch {
+      setSyncMessage("Could not sync progress. Your device progress is safe.");
+    } finally {
+      setSyncPending(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!hydrated || !signedIn || !cloudEnabled) return;
+    const completedStepIds = visitedLessons.map((index) => STEP_IDS[index]).filter((step): step is typeof STEP_IDS[number] => Boolean(step));
+    fetch("/api/progress/life-of-david", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        activeStepId: STEP_IDS[activeLesson],
+        completedStepIds,
+        latestScore,
+        quizTotal: latestScore === null ? null : questions.length
+      })
+    }).then(async (response) => {
+      if (response.ok) {
+        const result = await response.json();
+        setCloudProgress(result.progress ?? null);
+      }
+    }).catch(() => {
+      setSyncMessage("Cloud sync is temporarily unavailable. Your device progress is still saved.");
+    });
+  }, [activeLesson, visitedLessons, latestScore, hydrated, signedIn, cloudEnabled]);
+
   const [quizStarted, setQuizStarted] = useState(false);
   const [questionIndex, setQuestionIndex] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
@@ -122,8 +237,22 @@ export default function LessonExperience() {
 
   function chooseAnswer(index: number) {
     if (selected !== null) return;
+    const wasCorrect = index === question.answer;
     setSelected(index);
-    setAnswers((previous) => [...previous, index === question.answer]);
+    setAnswers((previous) => [...previous, wasCorrect]);
+    if (signedIn && cloudEnabled) {
+      fetch("/api/progress/life-of-david/attempts", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          itemId: "david-quiz-" + (questionIndex + 1),
+          responseMode: "recognize",
+          wasCorrect
+        })
+      }).catch(() => {
+        setSyncMessage("A recall attempt could not sync. Your local quiz still works.");
+      });
+    }
   }
 
   function nextQuestion() {
@@ -161,7 +290,20 @@ export default function LessonExperience() {
             <span><strong>{item.title}</strong><small>{item.kind} · {item.minutes}</small></span>
           </button>
         ))}
-        <div className="sidebar-note">{hydrated ? "Progress is saved on this device, so you can return to this journey in the same browser." : "Restoring your learning progress…"}{latestScore !== null && <strong className="saved-score">Latest quiz: {latestScore} of {questions.length} correct</strong>}</div>
+        <div className="sidebar-note">
+          {hydrated ? "Progress is saved on this device." : "Restoring your learning progress…"}
+          {latestScore !== null && <strong className="saved-score">Latest quiz: {latestScore} of {questions.length} correct</strong>}
+          {signedIn ? (
+            <div className="cloud-sync">
+              <button className="sync-button" onClick={syncProgress} disabled={!syncAvailable || syncPending}>
+                {syncPending ? "Syncing…" : cloudEnabled ? "Sync progress again" : cloudProgress ? "Merge device + account progress" : "Save progress to account"}
+              </button>
+              {syncMessage && <p role="status" className="sync-message">{syncMessage}</p>}
+            </div>
+          ) : (
+            <p className="sync-message"><Link href="/auth/sign-in">Sign in</Link> to connect progress across devices.</p>
+          )}
+        </div>
       </aside>
 
       <section className="lesson-panel" aria-live="polite">
@@ -223,7 +365,7 @@ export default function LessonExperience() {
               <button className="secondary-button" onClick={() => { setFinished(false); setQuizStarted(false); visitLesson(0); }}>Review lessons</button>
               <button className="primary-button" onClick={restartQuiz}>Try the questions again ↻</button>
             </div>
-            <p className="content-note">Your latest score is saved locally in this browser. It is not synced across devices, and no account is required.</p>
+            <p className="content-note">{cloudEnabled ? "Your progress is saved on this device and connected to your PATH account." : "Your latest score is saved locally in this browser. Connect your account from the journey sidebar to sync progress across devices."}</p>
             <Link className="return-link" href="/">Return to PATH home ↗</Link>
           </div>
         )}
