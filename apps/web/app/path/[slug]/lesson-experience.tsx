@@ -205,7 +205,7 @@ export default function LessonExperience() {
               <p>{question.explanation}</p>
             </div>}
             <div className="lesson-actions">
-              <button className="secondary-button" onClick={() => { setQuizStarted(false); setActiveLesson(2); }}>Back to lessons</button>
+              <button className="secondary-button" onClick={() => { setQuizStarted(false); visitLesson(2); }}>Back to lessons</button>
               <button className="primary-button" onClick={nextQuestion} disabled={selected === null}>{questionIndex === questions.length - 1 ? "See my results →" : "Next question →"}</button>
             </div>
           </>
@@ -216,8 +216,8 @@ export default function LessonExperience() {
             <div className="results-icon">✓</div>
             <div className="eyebrow">PRACTICE COMPLETE</div>
             <h2>You showed up to learn.</h2>
-            <p className="results-score">{correctCount} <span>of {questions.length} correct</span></p>
-            <p className="lesson-body">{correctCount === questions.length ? "Excellent recall. Keep connecting the details to the passage itself." : "Good practice. Your missed answers are not a failure; they show what to revisit. Return to 1 Samuel 16 and try explaining the story in your own words."}</p>
+            <p className="results-score">{latestScore ?? correctCount} <span>of {questions.length} correct</span></p>
+            <p className="lesson-body">{(latestScore ?? correctCount) === questions.length ? "Excellent recall. Keep connecting the details to the passage itself." : "Good practice. Your missed answers are not a failure; they show what to revisit. Return to 1 Samuel 16 and try explaining the story in your own words."}</p>
             <div className="insight-card"><span className="insight-label">NEXT STEP</span><p>Read 1 Samuel 16 once more. Then explain why David's anointing matters in the wider story of Israel.</p></div>
             <div className="lesson-actions">
               <button className="secondary-button" onClick={() => { setFinished(false); setQuizStarted(false); visitLesson(0); }}>Review lessons</button>
