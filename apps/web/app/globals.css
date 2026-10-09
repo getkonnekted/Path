@@ -139,3 +139,5 @@ h1 { max-width: 680px; margin: 18px 0; font-size: clamp(3rem, 7vw, 5.6rem); line
   .lesson-actions { flex-direction: column-reverse; }
   .lesson-actions button { width: 100%; }
 }
+
+.saved-score { display: block; margin-top: 10px; color: var(--green); font-size: .78rem; }
