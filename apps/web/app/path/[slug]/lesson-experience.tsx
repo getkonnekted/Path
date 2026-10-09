@@ -62,8 +62,8 @@ export default function LessonExperience() {
   const [answers, setAnswers] = useState<boolean[]>([]);
   const [finished, setFinished] = useState(false);
 
-  const lesson = lessons[activeLesson];
-  const question = questions[questionIndex];
+  const lesson = lessons[activeLesson]!;
+  const question = questions[questionIndex]!;
   const correctCount = answers.filter(Boolean).length;
   const percent = finished ? 100 : quizStarted ? Math.round((questionIndex / questions.length) * 100) : Math.round(((activeLesson + 1) / lessons.length) * 100);
 
