@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   typecheck:
-    name: Install and typecheck workspace
+    name: Install, typecheck, and build web
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -28,3 +28,5 @@ jobs:
         run: pnpm install --no-frozen-lockfile
       - name: Typecheck workspace
         run: pnpm typecheck
+      - name: Build web application
+        run: pnpm --filter @path/web build
